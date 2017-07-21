@@ -9,16 +9,17 @@ function [sim,indices] = SimDP(start,iFrames,last)
 
     for i = 2:length(frame_graph)
         for j = 1:length(frame_graph{i}(1,1,1,:))
-            max=-1;
+            maxi=-1;
             index=-1;
             for k = 1:length(frame_graph{i-1}(1,1,1,:))
-                s=sim{i-1}(k)*cosine_sim(frame_graph{i-1}(:,:,:,k),frame_graph{i}(:,:,:,j));
-                if s>max
-                    max = s;
+                %s=sim{i-1}(k)*
+                s=max([cosine_sim(frame_graph{1}(:,:,:,1),frame_graph{i}(:,:,:,j)),cosine_sim(frame_graph{end}(:,:,:,1),frame_graph{i}(:,:,:,j))]);
+                if s>maxi
+                    maxi = s;
                     index = k;
-                end
-            sim{i}(j)=max;
-            ind{i}(j)=index;
+                end    
+            sim{i}(j)=maxi;
+            [ind{i}(j)]=index;
             end
         end
     end

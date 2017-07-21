@@ -168,15 +168,11 @@ switch(dataset)
 %                 gt = gt(1:end-1,:);
 %         end
 %         config.gt = gt;
-        someDir = [benchmarkSeqHome config.seqName '/img1'] ;
-        [status,cmdout] = system(['dir ' someDir ]);
-        length(cmdout);
-        s=textscan(cmdout,'%s');
-        
-
-        nFrames = length(s{1});
+        someDir = 'datasets'%/MOT/' 
+        [status,cmdout] = system(['dir ' someDir  '*.* /s']);
+        cmdout
+        nFrames = 900;
         config.imgList = config.imgList(1:nFrames);
-        config.det= fopen([benchmarkSeqHome config.seqName 'det.txt'],'r');
 %         config.gt = config.gt(1:nFrames,:);
         
 end
