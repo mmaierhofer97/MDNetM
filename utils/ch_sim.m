@@ -27,3 +27,4 @@ HnRed2 = imhist(Red2)./numel(Red2);
 %hn2 = imhist(Im2(:))./numel(Im2);
 % Calculate the histogram error
 sim = 1 - mean([sum(imabsdiff(HnBlue1,HnBlue2)),sum(imabsdiff(HnRed1,HnRed2)),sum(imabsdiff(HnGreen1,HnGreen2))])/2;
+
