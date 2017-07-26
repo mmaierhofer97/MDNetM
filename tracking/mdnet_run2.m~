@@ -1,4 +1,4 @@
-function [ result ] = mdnet_run(images, net, display, pathSave, det)
+function [ result ] = mdnet_run2(images, net, display, pathSave, det)
 % % MDNET_RUN
 % % Main interface for MDNet tracker
 % %
@@ -147,6 +147,8 @@ nSamp=repmat({5}, M, 1);
 occSim=cell(M,1);
 occCount=cell(M,1);
 target_score=cell(M,1);
+ovBool=zeros(M);
+ovConv = cell(M,1);
 %%%%%%%%%%%%%%
 %% Main loop
 for To = 2:nFrames
@@ -228,25 +230,31 @@ for To = 2:nFrames
         end
     target_score{m};
     end
-    for m2=1:M-1
-        [ign,srt]=sort([target_score{:,1}],'descend');
-        m=srt(m2);
-        for n2=m2+1:M
-                n=srt(n2);
+    for m=1:M-1
+        for n=m+1:M
+                try ovBool(m,n)==0;
+                catch ovBool(m,n)=0;
+                end
                 sim = cosine_sim(occFrames{m}(:,:,:,1),occFrames{n}(:,:,:,1));
-                %hsim = hog_sim(imcrop(img,occSamples{m}(1,:)),imcrop(img,occSamples{n}(1,:)))
                 rat = overlap_ratio(occSamples{m}(1,:),occSamples{n}(1,:));
-                fprintf(['   ' num2str(target_score{m}) ', ' num2str(target_score{n}) ', ' num2str(sim) '  '])
-                if sim > 1.6 && rat > 0.2 && target_score{m}>0 && target_score{n}>0
-                    To
+                if  rat > 0.2 && ((sim > 0.6 && target_score{m}>0 && target_score{n}>0) || ovBool(m,n))
+                    if ovBool(m,n)==0
+                        ovBool(m,n)=1;
+                        img2 = imread(images{To-1});
+                        fconv = mdnet_features_convX(net_conv, img2, result(m,To-1,:), opts);
+                        occStart{m} = fconv(:,:,:,1);
+                        fconv = mdnet_features_convX(net_conv, img2, result(n,To-1,:), opts);
+                        occStart{n} = fconv(:,:,:,1);
+                    end
+                    ovConv{m}{end+1}{1}=occFrames{m}(:,:,:,1);
+                    ovConv{n}{end+1}{1}=occFrames{n}(:,:,:,1)
+                    
                     if length(occSamples{n}(:,1))>1
                         for ind=2:length(occSamples{n})
                             if (overlap_ratio(occSamples{m}(1,:),occSamples{n}(ind,:))<0.2)
-                                result(n,To,:)=occSamples{n}(ind,:);
-                                feat_fc = mdnet_features_fcX(net_fc{n}, occFrames{n}(:,:,:,ind), opts);
-                                feat_fc = squeeze(feat_fc)';
-                                target_score{n}=feat_fc(1);
-                                occSamples{n}=occSamples{n}(ind:end,:);
+                                ovConv{n}{end}{2}=occFrames{n}(:,:,:,ind);
+                                %occSamples{n}=occSamples(ind:end,:);
+                                %occFrames{n}=occFrames(ind:end,:);
                                 break;
                             end
                         end
@@ -257,15 +265,45 @@ for To = 2:nFrames
                         feat_fc = squeeze(feat_fc)';
                         [scores,idx] = sort(feat_fc(:,2),'descend');
                         samples=samples(idx,:);
+                        feat_conv=feat_conv(:,:,:,idx);
                         for ind=1:length(samples)
                             if (overlap_ratio(occSamples{m}(1,:),samples(ind,:))<0.2)
-                                result(n,To,:)=samples(ind,:);
-                                target_score{n}=scores(idx(ind));
+                                ovConv{n}{end}{2}=feat_conv(:,:,:,ind);
                                 occSamples{n}=samples(ind:end,:);
+                                occFrames{n}=feat_conv(:,:,:,ind:end);
                                 break;
                             end
                         end
                     end
+                    if length(occSamples{m}(:,1))>1
+                        for ind=2:length(occSamples{m})
+                            if (overlap_ratio(occSamples{n}(1,:),occSamples{m}(ind,:))<0.2)
+                                ovConv{m}{end}{2}=occFrames{m}(:,:,:,ind);
+                                %occSamples{n}=occSamples(ind:end,:);
+                                %occFrames{n}=occFrames(ind:end,:);
+                                break;
+                            end
+                        end
+                    else
+                        samples = gen_samples('gaussian', targetLoc(m,:), opts.nSamples, opts, trans_f(m), scale_f(m));
+                        feat_conv = mdnet_features_convX(net_conv, img, samples, opts);
+                        feat_fc = mdnet_features_fcX(net_fc{m}, feat_conv, opts);
+                        feat_fc = squeeze(feat_fc)';
+                        [scores,idx] = sort(feat_fc(:,2),'descend');
+                        samples=samples(idx,:);
+                        feat_conv=feat_conv(:,:,:,idx);
+                        for ind=1:length(samples)
+                            if (overlap_ratio(occSamples{n}(1,:),samples(ind,:))<0.2)
+                                ovConv{m}{end}{2}=feat_conv(:,:,:,ind);
+                                occSamples{m}=samples(ind:end,:);
+                                occFrames{m}=feat_conv(:,:,:,ind:end);
+                                break;
+                            end
+                        end
+                    end
+                elseif target_score{m}>0 && target_score{n}>0
+                else
+                    1
                 end
         end
     end

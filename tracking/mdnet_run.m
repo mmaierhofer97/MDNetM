@@ -12,11 +12,11 @@ function [ result ] = mdnet_run(images, net, display, pathSave, det)
 % %   result - Nx4 matrix of the tracking result Nx[left,top,width,height]
 % %
 % % Hyeonseob Nam, 2015
-% % 
+% % save(['.' conf.seqName 'res'])
 % 
 % if(nargin<4), display = true; end
 % 
-% initLoc = det(det(:,1)==1 & det(:,7)>0 ,3:6);
+% initLoc = det([5,8],3:6);%det(det(:,1)==1 & det(:,7)>0,3:6);
 % %% Initialization
 % fprintf('Initialization...\n');
 % nFrames = length(images);
@@ -166,7 +166,7 @@ for To = 2:nFrames
             samplesD = detLoc(r>0.7,:);
         else
            samplesD = detLoc(r>0.7,:); 
-           size(detLoc)
+           %size(detLoc)
         end
         if size(samplesD,1) > 0
             feat_conv = mdnet_features_convX(net_conv, img, samplesD, opts);
@@ -236,6 +236,7 @@ for To = 2:nFrames
                 sim = cosine_sim(occFrames{m}(:,:,:,1),occFrames{n}(:,:,:,1));
                 %hsim = hog_sim(imcrop(img,occSamples{m}(1,:)),imcrop(img,occSamples{n}(1,:)))
                 rat = overlap_ratio(occSamples{m}(1,:),occSamples{n}(1,:));
+                fprintf(['   ' num2str(target_score{m}) ', ' num2str(target_score{n}) ', ' num2str(sim) '  '])
                 if sim > 0.6 && rat > 0.2 && target_score{m}>0 && target_score{n}>0
                     To
                     if length(occSamples{n}(:,1))>1
@@ -255,7 +256,7 @@ for To = 2:nFrames
                         feat_fc = mdnet_features_fcX(net_fc{n}, feat_conv, opts);
                         feat_fc = squeeze(feat_fc)';
                         [scores,idx] = sort(feat_fc(:,2),'descend');
-                        samples=samples(idx,:)
+                        samples=samples(idx,:);
                         for ind=1:length(samples)
                             if (overlap_ratio(occSamples{m}(1,:),samples(ind,:))<0.2)
                                 result(n,To,:)=samples(ind,:);
@@ -308,7 +309,7 @@ for To = 2:nFrames
                 st=result(m,To-(occCount{m}),:);
                 en=result(m,To,:);
                 for i=1:(occCount{m}-1)
-                    frI = To-(occCount{m})+i
+                    frI = To-(occCount{m})+i;
                     result(m,frI,:) = (i*en+(occCount{m}-i)*st)/occCount{m};
                     img = imread(images{frI});
                     if display
@@ -324,7 +325,7 @@ for To = 2:nFrames
 
                         text(10,10,[num2str(frI)],'Color','y', 'HorizontalAlignment', 'left', 'FontWeight','bold', 'FontSize', 30); 
                         hold off;
-                        imwrite(frame2im(getframe(gcf)), [ pathSave 'b' num2str(frI) '.jpg']);
+                        imwrite(frame2im(getframe(gcf)), [ pathSave num2str(frI) '.jpg']);
 
                         drawnow;
                     end

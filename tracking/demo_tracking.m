@@ -7,7 +7,7 @@
 
 clear;
 
-conf = genConfig('mot','/MOT16/train/MOT16-11/');
+conf = genConfig('mot','/MOT16/train/MOT16-04/');
 % conf = genConfig('vot2015','ball1');
 
 switch(conf.dataset)
@@ -18,7 +18,7 @@ switch(conf.dataset)
     case 'vot2015'
         net = fullfile('models','mdnet_otb-vot15.mat');
     case 'mot'
-        net = fullfile('models','mdnet_vot-otb_new.mat');
+        net = fullfile('models','mdnet_vot-otb.mat');
 end
 %% define the initialization for multiple targets. 2 as an example here
 %conf.gt = [455,158,42,140]; %16-07
@@ -29,6 +29,7 @@ conf.gt = [150,185,45,150] %TUD-Crossing
 pathSave = [conf.imgDir(1:end-4) 'trackingM_withDet/'];
 detPath = fullfile(conf.imgDir(1:end-4),'det/det.txt');
 det = importdata(detPath);
-result = mdnet_run(conf.imgList, net, 1, pathSave,det);
+result = mdnet_run2(conf.imgList, net, 1, pathSave,det);
+save(['./dataset/MOT' conf.seqName 'res'])
 %[p,n] = SampGen(conf.imgList, conf.gt, net, 1, pathSave);
 %%result = mdnet_run_ori(conf.imgList, conf.gt, net, 1);

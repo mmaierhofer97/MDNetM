@@ -1,7 +1,11 @@
-function [sim,indices] = SimDP(start,iFrames,last)
+function [sim,indices] = SimDP(start,conv,x)
+    start=start{x};
+    x
+    conv
+    conv=conv{x}
     frame_graph{1}=start;
-    for i = 1:length(iFrames)
-        frame_graph{i+1}=iFrames{i};
+    for i = 1:length(conv)
+        frame_graph{i+1}=conv{i};
     end
     frame_graph{length(iFrames)+2}=last;
     

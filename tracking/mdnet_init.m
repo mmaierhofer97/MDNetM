@@ -7,7 +7,7 @@ function [net_conv, net_fc, opts] = mdnet_init(image, net)
 
 %% set opts
 % use gpu
-opts.useGpu = false;
+opts.useGpu = true;
 % model def
 opts.net_file = net;
 
