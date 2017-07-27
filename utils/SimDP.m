@@ -33,7 +33,7 @@ function [sim,indices] = SimDP(start,conv,ovEnd,ovSamp,SampStart,SampEnd,x)
                      index = k;
                  end    
              sim{i}(j)=maxi;
-             ind{i}(j)= index
+             ind{i}(j)= index;
              end
          end
     end
