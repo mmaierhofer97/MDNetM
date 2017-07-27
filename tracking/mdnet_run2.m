@@ -1,5 +1,5 @@
 function [ result ] = mdnet_run2(images, net, display, pathSave, det)
-% % MDNET_RUN
+% % % MDNET_RUN
 % % Main interface for MDNet tracker
 % %
 % % INPUT:
@@ -150,6 +150,8 @@ target_score=cell(M,1);
 ovBool=0;
 ovConv = cell(M,1);
 ovSamp = cell(M,1);
+SampStart = cell(M,1);
+SampEnd = cell(M,1);
 %%%%%%%%%%%%%%
 %% Main loop
 for To = 2:nFrames
@@ -236,17 +238,24 @@ for To = 2:nFrames
             try ovBool(m,n)==0;
             catch ovBool(m,n)=0;
             end
-            thr=0.5;
+            try ovBool(n,m)==0;
+            catch ovBool(n,m)=0;
+            end
+            thr=0.4;
+            thS=0.6;
             sim = cosine_sim(occFrames{m}(:,:,:,1),occFrames{n}(:,:,:,1));
             rat = overlap_ratio(occSamples{m}(1,:),occSamples{n}(1,:));
-            if  rat > thr && sim > 0.6 && ((target_score{m}>0 && target_score{n}>0) || ovBool(m,n))
+            if  rat > thr/2&&(( sim > thS && target_score{m}>0 && target_score{n}>0) || ovBool(m,n))
                 if ovBool(m,n)==0
                     ovBool(m,n)=1
+                    ovBool(n,m)=1;
                     img2 = imread(images{To-1});
                     fconv = mdnet_features_convX(net_conv, img2, result(m,To-1,:), opts);
                     occStart{m} = fconv(:,:,:,1);
                     fconv = mdnet_features_convX(net_conv, img2, result(n,To-1,:), opts);
                     occStart{n} = fconv(:,:,:,1);
+                    SampStart{n} =result(n,To-1,:);
+                    SampStart{m} =result(m,To-1,:);
                 end
                 ovConv{m}{end+1}{1}=occFrames{m}(:,:,:,1);
                 ovConv{n}{end+1}{1}=occFrames{n}(:,:,:,1);
@@ -255,7 +264,7 @@ for To = 2:nFrames
 
                 if length(occSamples{n}(:,1))>1
                     for ind=2:length(occSamples{n})
-                        if (overlap_ratio(occSamples{m}(1,:),occSamples{n}(ind,:))<thr)&& cosine_sim(occFrames{m}(:,:,:,1),occFrames{n}(:,:,:,ind))<0.6
+                        if (overlap_ratio(occSamples{m}(1,:),occSamples{n}(ind,:))<thr) || cosine_sim(occFrames{m}(:,:,:,1),occFrames{n}(:,:,:,ind))<thS
                             ovConv{n}{end}{2}=occFrames{n}(:,:,:,ind);
                             ovSamp{n}{end}{2}=occSamples{n}(ind,:);
                             %occSamples{n}=occSamples(ind:end,:);
@@ -272,7 +281,7 @@ for To = 2:nFrames
                     samples=samples(idx,:);
                     feat_conv=feat_conv(:,:,:,idx);
                     for ind=1:length(samples)
-                        if (overlap_ratio(occSamples{m}(1,:),samples(ind,:))<thr) && cosine_sim(occFrames{m}(:,:,:,1), feat_conv(:,:,:,ind))<0.6
+                        if (overlap_ratio(occSamples{m}(1,:),samples(ind,:))<thr) || cosine_sim(occFrames{m}(:,:,:,1), feat_conv(:,:,:,ind))<thS
                             ovConv{n}{end}{2}=feat_conv(:,:,:,ind);
                             ovSamp{n}{end}{2}=samples(ind,:);
                             occSamples{n}=samples(ind:end,:);
@@ -283,7 +292,7 @@ for To = 2:nFrames
                 end
                 if length(occSamples{m}(:,1))>1
                     for ind=2:length(occSamples{m})
-                        if (overlap_ratio(occSamples{n}(1,:),occSamples{m}(ind,:))<thr) && cosine_sim(occFrames{n}(:,:,:,1),occFrames{m}(:,:,:,ind))<0.6
+                        if (overlap_ratio(occSamples{n}(1,:),occSamples{m}(ind,:))<thr) || cosine_sim(occFrames{n}(:,:,:,1),occFrames{m}(:,:,:,ind))<thS
                             ovConv{m}{end}{2}=occFrames{m}(:,:,:,ind);
                             ovSamp{m}{end}{2}=occSamples{m}(ind,:);
                             %occSamples{n}=occSamples(ind:end,:);
@@ -300,7 +309,7 @@ for To = 2:nFrames
                     samples=samples(idx,:);
                     feat_conv=feat_conv(:,:,:,idx);
                     for ind=1:length(samples)
-                        if (overlap_ratio(occSamples{n}(1,:),samples(ind,:))<thr) && cosine_sim(occFrames{n}(:,:,:,1), feat_conv(:,:,:,ind))<0.6
+                        if (overlap_ratio(occSamples{n}(1,:),samples(ind,:))<thr) || cosine_sim(occFrames{n}(:,:,:,1), feat_conv(:,:,:,ind))<thS
                             ovConv{m}{end}{2}=feat_conv(:,:,:,ind);
                             ovSamp{m}{end}{2}=samples(ind,:);
                             occSamples{m}=samples(ind:end,:);
@@ -313,10 +322,13 @@ for To = 2:nFrames
                 %cosine_sim(occStart{m},ovConv{m}{end}{2})
             elseif ovBool(m,n)
                 ovBool(m,n)=0
+                ovBool(n,m)=0;
                 occEnd{m}=occFrames{m}(:,:,:,1);
                 occEnd{n}=occFrames{n}(:,:,:,1);
+                SampEnd{n} =result(n,To,:);
+                SampEnd{m} =result(m,To,:);
                 x=[m,n]
-                [s,ind]=SimDP(occStart,ovConv,occEnd,x);
+                [s,ind]=SimDP(occStart,ovConv,occEnd,ovSamp,SampStart,SampEnd,x);
                 ind
                 for i=1:length(ind)
                     frI = To-(length(ind)+1)+i;
@@ -338,22 +350,25 @@ for To = 2:nFrames
 
                         text(10,10,[num2str(frI)],'Color','y', 'HorizontalAlignment', 'left', 'FontWeight','bold', 'FontSize', 30); 
                         hold off;
-                        imwrite(frame2im(getframe(gcf)), [ pathSave num2str(frI) '.jpg']);
+                        imwrite(frame2im(getframe(gcf)), [ pathSave '1/' num2str(frI) '.jpg']);
 
                         drawnow;
                     end
                 end
                 ovConv{m}=cell(0);
                 ovConv{n}=cell(0);
-                ovSimp{m}=cell(0);
-                ovSimp{n}=cell(0);
+                ovSamp{m}=cell(0);
+                ovSamp{n}=cell(0);
+                SampStart{m}=cell(0);
+                SampStart{n}=cell(0);
+                
             end
         end
     end
     
     for m=1:M
         %%%%%%%%%%%%%%%%%%%%%% Occlusion Interpolation %%%%%%%%%%%%%%%%%%
-        if (target_score{m}<0)
+        if (target_score{m}<0 && sum(ovBool(m,:)==0))
              if (occBool{m}==true)
 %                 nSamp{m}=2;
 %                 img2 = imread(images{To-1});
@@ -428,7 +443,7 @@ for To = 2:nFrames
                 trans_f(m) = opts.trans_f;
             end
        %% Prepare training data
-        if(target_score{m}>0)
+        if(target_score{m}>0)&&sum(ovBool(m,:))==0
             pos_examples = gen_samples('gaussian', transpose(squeeze(result(m,To,:))), opts.nPos_update*2, opts, 0.1, 5);
             r = overlap_ratio(pos_examples,transpose(squeeze(result(m,To,:))));
             pos_examples = pos_examples(r>opts.posThr_update,:);
@@ -461,9 +476,9 @@ for To = 2:nFrames
 
         %% Network update
 
-        if((mod(To,opts.update_interval)==0 || target_score{m}<0) && To~=nFrames)
+        if((mod(To,opts.update_interval)==0 || (target_score{m}<0||sum(ovBool(m,:))~=0)) && To~=nFrames)
             
-            if (target_score{m}<0) % short-term update
+            if (target_score{m}<0||sum(ovBool(m,:))~=0) % short-term update
                 temp_data = cell(1,1,1,min(opts.nFrames_short, size(success_frames{m},2)));
                 temp_data(1,1,:,:) = total_pos_data(m,success_frames{m}(max(1,end-opts.nFrames_short+1):end));
                 pos_data = cell2mat(temp_data);
