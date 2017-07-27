@@ -16,7 +16,7 @@ function [ result ] = mdnet_run2(images, net, display, pathSave, det)
 % 
 % if(nargin<4), display = true; end
 % 
-% initLoc = det([5,8],3:6);%det(det(:,1)==1 & det(:,7)>0,3:6);
+% initLoc = det(det(:,1)==1 & det(:,7)>1.5,3:6);
 % %% Initialization
 % fprintf('Initialization...\n');
 % nFrames = length(images);
@@ -140,11 +140,9 @@ end
 occBool = repmat({true}, M, 1);
 occFrames = cell(M,1);
 occSamples = cell(M,1);
-occImg = cell(M,1);
 occStart = cell(M,1);
 occEnd = cell(M,1);
 nSamp=repmat({5}, M, 1);
-occSim=cell(M,1);
 occCount=cell(M,1);
 target_score=cell(M,1);
 ovBool=0;
@@ -233,6 +231,7 @@ for To = 2:nFrames
         end
     target_score{m};
     end
+        %%%%%%%%%%%%%%%%%%%%%% Overlap Logic %%%%%%%%%%%%%%%%%%%%%%%%
     for m=1:M-1
         for n=m+1:M
             try ovBool(m,n)==0;
@@ -247,8 +246,8 @@ for To = 2:nFrames
             rat = overlap_ratio(occSamples{m}(1,:),occSamples{n}(1,:));
             if  rat > thr/2&&(( sim > thS && target_score{m}>0 && target_score{n}>0) || ovBool(m,n))
                 if ovBool(m,n)==0
-                    ovBool(m,n)=1
-                    ovBool(n,m)=1;
+                    ovBool(m,n)=1;
+                    ovBool(n,m)=1
                     img2 = imread(images{To-1});
                     fconv = mdnet_features_convX(net_conv, img2, result(m,To-1,:), opts);
                     occStart{m} = fconv(:,:,:,1);
@@ -321,8 +320,8 @@ for To = 2:nFrames
                 %cosine_sim(occStart{m},ovConv{m}{end}{1})
                 %cosine_sim(occStart{m},ovConv{m}{end}{2})
             elseif ovBool(m,n)
-                ovBool(m,n)=0
-                ovBool(n,m)=0;
+                ovBool(m,n)=0;
+                ovBool(n,m)=0
                 occEnd{m}=occFrames{m}(:,:,:,1);
                 occEnd{n}=occFrames{n}(:,:,:,1);
                 SampEnd{n} =result(n,To,:);
@@ -336,6 +335,15 @@ for To = 2:nFrames
                     for j=1:length(x)
                         result(x(j),frI,:)=ovSamp{x(j)}{i}{(j~=ind(i))+1};
                     end
+                end
+                tmp=result;
+                for i=1:length(ind)
+                    frI = To-(length(ind)+1)+i;
+                    dist = min([3,frI-1,To-frI]);
+                    for j=1:length(x)
+                        
+                        result(x(j),frI,:)= mean(tmp(x(j),frI-dist:frI+dist,:),2);
+                    end
                     img2 = imread(images{frI});
                     if display
                         hc = get(gca, 'Children'); delete(hc(1:end-1));
@@ -344,13 +352,12 @@ for To = 2:nFrames
                         for c = 1:M
                             rectangle('Position', result(c,frI,:), 'EdgeColor', colormap(c), 'Linewidth', 1);
                         end
-
-                        %%rectangle('Position', result(To,:), 'EdgeColor', [1 0 0], 'Linewidth', 3);
                         set(gca,'position',[0 0 1 1]);
 
                         text(10,10,[num2str(frI)],'Color','y', 'HorizontalAlignment', 'left', 'FontWeight','bold', 'FontSize', 30); 
                         hold off;
-                        imwrite(frame2im(getframe(gcf)), [ pathSave '1/' num2str(frI) '.jpg']);
+                        imwrite(frame2im(getframe(gcf)), [ pathSave num2str(frI) '.jpg']);
+                        %imwrite(frame2im(getframe(gcf)), [ pathSave '5/' num2str(frI) '.jpg']);
 
                         drawnow;
                     end
@@ -367,41 +374,22 @@ for To = 2:nFrames
     end
     
     for m=1:M
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %%%%%%%%%%%%%%%%%%%%%% Occlusion Interpolation %%%%%%%%%%%%%%%%%%
         if (target_score{m}<0 && sum(ovBool(m,:)==0))
              if (occBool{m}==true)
 %                 nSamp{m}=2;
-%                 img2 = imread(images{To-1});
-%                 fconv = mdnet_features_convX(net_conv, img2, result(m,To-1,:), opts);
-%                 occStart{m} = fconv(:,:,:,1);
-%                 occSamples{m}{end+1}=squeeze(result(m,To-1,:));
-%                 occImg{m}{end+1}=img2;
                  occBool{m} = false;
                  occCount{m}=0;
              end
              occCount{m}=occCount{m}+1;   
-%             occFrames{m}{end+1}=feat_conv;
-%             occSamples{m}{end+1}=[samplesD;samples];
-%             occImg{m}{end+1}=img;
+
         else
             if (occBool{m}==false)
 %                nSamp{m}=5;
                 occCount{m}=occCount{m}+1;
                 occBool{m} = true;
                 
-                %occEnd{m} = feat_conv(:,:,:,idx(1));
-%                occSamples{m}{end+1}=squeeze(result(m,To,:));
-%                occImg{m}{end+1}=img;
-
-%                [sim,ind] = SimDP_hog(occImg{m},occSamples{m});
-                %[sim,ind] = SimDP(occStart{m},occFrames{m},occEnd{m});
-%                for x=1:length(ind)
-%                    occSim{m}(:,end+1) = [To-(length(ind)+1)+x; sim{x}(ind(x))];
-%                end
-%                fileID = fopen([num2str(m) 'exp.txt'],'w');
-%                fprintf(fileID,'%6s %12s\n','x','sim');
-%                fprintf(fileID,'%6.2f %12.8f\n',occSim{m});
-%                fclose(fileID);
                 st=result(m,To-(occCount{m}),:);
                 en=result(m,To,:);
                 for i=1:(occCount{m}-1)
@@ -416,7 +404,6 @@ for To = 2:nFrames
                             rectangle('Position', result(c,frI,:), 'EdgeColor', colormap(c), 'Linewidth', 1);
                         end
 
-                        %%rectangle('Position', result(To,:), 'EdgeColor', [1 0 0], 'Linewidth', 3);
                         set(gca,'position',[0 0 1 1]);
 
                         text(10,10,[num2str(frI)],'Color','y', 'HorizontalAlignment', 'left', 'FontWeight','bold', 'FontSize', 30); 
@@ -428,9 +415,6 @@ for To = 2:nFrames
                     
                 end
                 img = imread(images{To});
-%                occFrames{m} = cell(0);
-%                occSamples{m} = cell(0);
-%                occImg{m} = cell(0);
             end
         end
                     

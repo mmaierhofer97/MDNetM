@@ -1,11 +1,10 @@
 function [sim,indices] = SimDP(start,conv,ovEnd,ovSamp,SampStart,SampEnd,x)
-    ovSamp{1}{1}{2}
     for i = 1:length(x)
         frame_graph{1}{i}{1}=start{x(i)};
         frame_graph{1}{i}{2}=start{x(i)};
         Samp{1}{i}{1}=SampStart{x(i)};
         Samp{1}{i}{2}=SampStart{x(i)};
-        for j = 1:length(conv{i})
+        for j = 1:length(conv{x(i)})
             frame_graph{j+1}{i}=conv{x(i)}{j};
             Samp{j+1}{i}=ovSamp{x(i)}{j};
         end
@@ -34,12 +33,13 @@ function [sim,indices] = SimDP(start,conv,ovEnd,ovSamp,SampStart,SampEnd,x)
                      index = k;
                  end    
              sim{i}(j)=maxi;
-             ind{i}(j)= index;
+             ind{i}(j)= index
              end
          end
     end
     indices=[];
-    indices(1)=ind{end}(1);
+    try indices(1)=ind{end}(1);
+    end
     j=1;
     i=1;
     while (length(j)>0)&&length(ind)>2
