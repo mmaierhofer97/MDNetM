@@ -1,4 +1,22 @@
-%% DEMO_TRACKING
+%% DEMO_TRACKING                    SampStart{m} =result(m,To-1,:);                    SampStart{m} =result(m,To-1,:);
+x =
+
+     3     9
+
+
+ind =
+
+     2     1     1     1     1     1     1     1
+
+x =
+
+     3     9
+
+
+ind =
+
+     2     1     1     1     1     1     1     1
+
 %
 % Running the MDNet tracker on a given sequence.
 %
@@ -7,7 +25,7 @@
 
 clear;
 
-conf = genConfig('mot','/MOT16/train/MOT16-11/');
+conf = genConfig('mot','/MOT16/test/MOT16-03/');
 % conf = genConfig('vot2015','ball1');
 
 switch(conf.dataset)

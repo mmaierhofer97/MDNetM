@@ -16,7 +16,7 @@ function [ result ] = mdnet_run2(images, net, display, pathSave, det)
 
 if(nargin<4), display = true; end
 
-initLoc = det(det(:,1)==1 & det(:,7)>0.5,3:6);
+initLoc = det(det(:,1)==1 & det(:,7)>0,3:6);
 %% Initialization
 fprintf('Initialization...\n');
 nFrames = length(images);
@@ -246,7 +246,7 @@ for To = 2:nFrames
             thS=0.6;
             sim = cosine_sim(occFrames{m}(:,:,:,1),occFrames{n}(:,:,:,1));
             rat = overlap_ratio(occSamples{m}(1,:),occSamples{n}(1,:));
-            if  rat > thr/2&&(( sim > thS && target_score{m}>0 && target_score{n}>0) || ovBool(m,n))
+            if  rat > thr/2&&(( sim > thS && target_score{m}>0 && target_score{n}>0)&&(sum(ovBool(m,:))==0)&&(sum(ovBool(n,:))==0) || ovBool(m,n))
                 if ovBool(m,n)==0
                     ovBool(m,n)=1;
                     ovBool(n,m)=1
@@ -371,7 +371,6 @@ for To = 2:nFrames
                 ovSamp{n}=cell(0);
                 SampStart{m}=cell(0);
                 SampStart{n}=cell(0);
-                
             end
         end
     end
