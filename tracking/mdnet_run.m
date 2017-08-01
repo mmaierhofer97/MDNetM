@@ -1,144 +1,144 @@
 function [ result ] = mdnet_run(images, net, display, pathSave, det)
-% % MDNET_RUN
-% % Main interface for MDNet tracker
-% %
-% % INPUT:
-% %   images  - 1xN cell of the paths to image sequences
-% %   region  - 1x4 vector of the initial bounding box [left,top,width,height]
-% %   net     - The path to a trained MDNet
-% %   display - True for displying the tracking result
-% %
-% % OUTPUT:
-% %   result - Nx4 matrix of the tracking result Nx[left,top,width,height]
-% %
-% % Hyeonseob Nam, 2015
-% % 
+% MDNET_RUN
+% Main interface for MDNet tracker
+%
+% INPUT:
+%   images  - 1xN cell of the paths to image sequences
+%   region  - 1x4 vector of the initial bounding box [left,top,width,height]
+%   net     - The path to a trained MDNet
+%   display - True for displying the tracking result
+%
+% OUTPUT:
+%   result - Nx4 matrix of the tracking result Nx[left,top,width,height]
+%
+% Hyeonseob Nam, 2015
 % 
-% if(nargin<4), display = true; end
-% 
-% det = det(det(:,5) > 0 ,:);
-% iL = det(det(:,1)==1 & det(:,7) > 0 ,3:6);
-% initLoc=iL(1,:);
-% for i=2:length(iL(:,1))
-%     ov=1;
-%     for j=1:length(initLoc(:,1))
-%         if overlap_ratio(iL(i,:),initLoc(j,:))>0.4
-%             ov=0;
-%         end
-%     end
-%     if ov==1
-%         initLoc(end+1,:) = iL(i,:);
-%     end
-% end
-% %% Initialization
-% fprintf('Initialization...\n');
-% 
-% nFrames = length(images);
-% M = size(initLoc, 1);
-% 
-% img = imread(images{1});
-% if(size(img,3)==1), img = cat(3,img,img,img); end
-% justifi = ones(M, 1);
-% justifiF = ones(M, 1);
-% MoF = zeros(M,1);
-% 
-% targetLoc = initLoc;
-% result = zeros(M, nFrames, 4); result(:,1,:) = targetLoc;
-% %% Initialize displayots
-% %colormap = ['r','m','c','y','g','b','w','k'];
-% colormap = rand(M,3);
-% if display
-%     figure(2);
-%     set(gcf,'Position',[200 100 600 400],'MenuBar','none','ToolBar','none');
-%     
-%     hd = imshow(img,'initialmagnification','fit'); hold on;
-%     for m = 1:M
-%         rectangle('Position', targetLoc(m,:), 'EdgeColor', colormap(m,:), 'Linewidth', 1);
-%         text(targetLoc(m,1) + targetLoc(m,3)/2,targetLoc(m,2) + 12,num2str(m),'Color',colormap(m,:), 'FontSize', 18,'HorizontalAlignment', 'center' ); 
-%     end
-%     set(gca,'position',[0 0 1 1]);
-%     
-%     text(10,10,'1','Color','y', 'HorizontalAlignment', 'left', 'FontWeight','bold', 'FontSize', 30);
-%     hold off;
-%     drawnow;
-% end
-% [net_conv, net_fc_init, opts] = mdnet_init(img, net);
-% 
-% %% Train a bbox regressor
-% if(opts.bbreg)
-%     for m = 1:M
-%         pos_examples = gen_samples('uniform_aspect', targetLoc(m,:), opts.bbreg_nSamples*10, opts, 0.3, 10);
-%         r = overlap_ratio(pos_examples,targetLoc(m,:));
-%         pos_examples = pos_examples(r>0.6,:);
-%         pos_examples = pos_examples(randsample(end,min(opts.bbreg_nSamples,end)),:);
-%         feat_conv = mdnet_features_convX(net_conv, img, pos_examples, opts);
-% 
-%         X = permute(gather(feat_conv),[4,3,1,2]);
-%         X = X(:,:);
-%         bbox = pos_examples;
-%         bbox_gt = repmat(targetLoc(m,:),size(pos_examples,1),1);
-%         bbox_reg{m} = train_bbox_regressor(X, bbox, bbox_gt);
-%     end
-% end
-% 
-% %% Extract training examples
-% fprintf('  extract features...\n');
-% 
-% for m = 1:M
-%     % draw positive/negative samples
-%     pos_examples = gen_samples('gaussian', targetLoc(m,:), opts.nPos_init*2, opts, 0.1, 5);
-%     r = overlap_ratio(pos_examples,targetLoc(m,:));
-%     pos_examples = pos_examples(r>opts.posThr_init,:);
-%     pos_examples = pos_examples(randsample(end,min(opts.nPos_init,end)),:);
-% 
-%     neg_examples = [gen_samples('uniform', targetLoc(m,:), opts.nNeg_init, opts, 1, 10);...
-%         gen_samples('whole', targetLoc(m,:), opts.nNeg_init, opts)];
-%     r = overlap_ratio(neg_examples,targetLoc(m,:));
-%     neg_examples = neg_examples(r<opts.negThr_init,:);
-%     neg_examples = neg_examples(randsample(end,min(opts.nNeg_init,end)),:);
-% 
-%     examples = [pos_examples; neg_examples];
-%     pos_idx = 1:size(pos_examples,1);
-%     neg_idx = (1:size(neg_examples,1)) + size(pos_examples,1);
-% 
-%     % extract conv3 features
-%     feat_conv = mdnet_features_convX(net_conv, img, examples, opts);
-%     pos_data = feat_conv(:,:,:,pos_idx);
-%     neg_data = feat_conv(:,:,:,neg_idx);
-% 
-% 
-%     %% Learning CNN
-%     %fprintf('  training cnn...\n');
-%     net_fc{m} = mdnet_finetune_hnm(net_fc_init,pos_data,neg_data,opts,...
-%         'maxiter',opts.maxiter_init,'learningRate',opts.learningRate_init);
-% end
-% 
-% 
-% 
-% %% Prepare training data for online update
-% total_pos_data = cell(1,1,1,M,nFrames);
-% total_neg_data = cell(1,1,1,M,nFrames);
-% for m=1:M
-%     neg_examples = gen_samples('uniform', targetLoc(m,:), opts.nNeg_update*2, opts, 2, 5);
-%     r = overlap_ratio(neg_examples,targetLoc(m,:));
-%     neg_examples = neg_examples(r<opts.negThr_init,:);
-%     neg_examples = neg_examples(randsample(end,min(opts.nNeg_update,end)),:);
-% 
-%     examples = [pos_examples; neg_examples];
-%     pos_idx = 1:size(pos_examples,1);
-%     neg_idx = (1:size(neg_examples,1)) + size(pos_examples,1);
-% 
-%     feat_conv = mdnet_features_convX(net_conv, img, examples, opts);
-%     total_pos_data{1,1,1,m,1} = feat_conv(:,:,:,pos_idx);
-%     total_neg_data{1,1,1,m,1} = feat_conv(:,:,:,neg_idx);
-% 
-%     success_frames{m} = [1];
-%     trans_f(m) = opts.trans_f;
-%     scale_f(m) = opts.scale_f;
-% end
-% 
-% save('16-11-set3')
-load('16-11-set3')
+
+if(nargin<4), display = true; end
+
+det = det(det(:,5) > 0 ,:);
+iL = det(det(:,1)==1 & det(:,7) > 0 ,3:6);
+initLoc=iL(1,:);
+for i=2:length(iL(:,1))
+    ov=1;
+    for j=1:length(initLoc(:,1))
+        if overlap_ratio(iL(i,:),initLoc(j,:))>0.4
+            ov=0;
+        end
+    end
+    if ov==1
+        initLoc(end+1,:) = iL(i,:);
+    end
+end
+%% Initialization
+fprintf('Initialization...\n');
+
+nFrames = length(images);
+M = size(initLoc, 1);
+
+img = imread(images{1});
+if(size(img,3)==1), img = cat(3,img,img,img); end
+justifi = ones(M, 1);
+justifiF = ones(M, 1);
+MoF = zeros(M,1);
+
+targetLoc = initLoc;
+result = zeros(M, nFrames, 4); result(:,1,:) = targetLoc;
+%% Initialize displayots
+%colormap = ['r','m','c','y','g','b','w','k'];
+colormap = rand(M,3);
+if display
+    figure(2);
+    set(gcf,'Position',[200 100 600 400],'MenuBar','none','ToolBar','none');
+    
+    hd = imshow(img,'initialmagnification','fit'); hold on;
+    for m = 1:M
+        rectangle('Position', targetLoc(m,:), 'EdgeColor', colormap(m,:), 'Linewidth', 1);
+        text(targetLoc(m,1) + targetLoc(m,3)/2,targetLoc(m,2) + 12,num2str(m),'Color',colormap(m,:), 'FontSize', 18,'HorizontalAlignment', 'center' ); 
+    end
+    set(gca,'position',[0 0 1 1]);
+    
+    text(10,10,'1','Color','y', 'HorizontalAlignment', 'left', 'FontWeight','bold', 'FontSize', 30);
+    hold off;
+    drawnow;
+end
+[net_conv, net_fc_init, opts] = mdnet_init(img, net);
+
+%% Train a bbox regressor
+if(opts.bbreg)
+    for m = 1:M
+        pos_examples = gen_samples('uniform_aspect', targetLoc(m,:), opts.bbreg_nSamples*10, opts, 0.3, 10);
+        r = overlap_ratio(pos_examples,targetLoc(m,:));
+        pos_examples = pos_examples(r>0.6,:);
+        pos_examples = pos_examples(randsample(end,min(opts.bbreg_nSamples,end)),:);
+        feat_conv = mdnet_features_convX(net_conv, img, pos_examples, opts);
+
+        X = permute(gather(feat_conv),[4,3,1,2]);
+        X = X(:,:);
+        bbox = pos_examples;
+        bbox_gt = repmat(targetLoc(m,:),size(pos_examples,1),1);
+        bbox_reg{m} = train_bbox_regressor(X, bbox, bbox_gt);
+    end
+end
+
+%% Extract training examples
+fprintf('  extract features...\n');
+
+for m = 1:M
+    % draw positive/negative samples
+    pos_examples = gen_samples('gaussian', targetLoc(m,:), opts.nPos_init*2, opts, 0.1, 5);
+    r = overlap_ratio(pos_examples,targetLoc(m,:));
+    pos_examples = pos_examples(r>opts.posThr_init,:);
+    pos_examples = pos_examples(randsample(end,min(opts.nPos_init,end)),:);
+
+    neg_examples = [gen_samples('uniform', targetLoc(m,:), opts.nNeg_init, opts, 1, 10);...
+        gen_samples('whole', targetLoc(m,:), opts.nNeg_init, opts)];
+    r = overlap_ratio(neg_examples,targetLoc(m,:));
+    neg_examples = neg_examples(r<opts.negThr_init,:);
+    neg_examples = neg_examples(randsample(end,min(opts.nNeg_init,end)),:);
+
+    examples = [pos_examples; neg_examples];
+    pos_idx = 1:size(pos_examples,1);
+    neg_idx = (1:size(neg_examples,1)) + size(pos_examples,1);
+
+    % extract conv3 features
+    feat_conv = mdnet_features_convX(net_conv, img, examples, opts);
+    pos_data = feat_conv(:,:,:,pos_idx);
+    neg_data = feat_conv(:,:,:,neg_idx);
+
+
+    %% Learning CNN
+    %fprintf('  training cnn...\n');
+    net_fc{m} = mdnet_finetune_hnm(net_fc_init,pos_data,neg_data,opts,...
+        'maxiter',opts.maxiter_init,'learningRate',opts.learningRate_init);
+end
+
+
+
+%% Prepare training data for online update
+total_pos_data = cell(1,1,1,M,nFrames);
+total_neg_data = cell(1,1,1,M,nFrames);
+for m=1:M
+    neg_examples = gen_samples('uniform', targetLoc(m,:), opts.nNeg_update*2, opts, 2, 5);
+    r = overlap_ratio(neg_examples,targetLoc(m,:));
+    neg_examples = neg_examples(r<opts.negThr_init,:);
+    neg_examples = neg_examples(randsample(end,min(opts.nNeg_update,end)),:);
+
+    examples = [pos_examples; neg_examples];
+    pos_idx = 1:size(pos_examples,1);
+    neg_idx = (1:size(neg_examples,1)) + size(pos_examples,1);
+
+    feat_conv = mdnet_features_convX(net_conv, img, examples, opts);
+    total_pos_data{1,1,1,m,1} = feat_conv(:,:,:,pos_idx);
+    total_neg_data{1,1,1,m,1} = feat_conv(:,:,:,neg_idx);
+
+    success_frames{m} = [1];
+    trans_f(m) = opts.trans_f;
+    scale_f(m) = opts.scale_f;
+end
+
+save('16-11-set3')
+%load('16-11-set3')
 
 %% Initialize displayots
 %colormap = ['r','m','c','y','g','b','w','k'];
@@ -194,6 +194,7 @@ for To = 2:min(nFrames)
         if(justifiF(m) == 0)
             continue;
         end
+        fprintf(num2str(m));
         prevLoc{m}=targetLoc(m,:);
         predLoc{m}=Trajectory_Pred(result(m,:,:),success_frames{m},To);
         r = overlap_ratio(detLoc,prevLoc{m});
@@ -471,46 +472,7 @@ for To = 2:min(nFrames)
             end
         end
     end
-    for m=1:M-1
-        if(justifiF(m) == 0)
-            ovCount(m,:)=0;
-            ovCount(:,m)=0;
-            continue;
-        end
-        for n=m+1:M
 
-            try ovCount(m,n)==0;
-            catch ovCount(m,n)=0;
-            end
-            try ovCount(n,m)==0;
-            catch ovCount(n,m)=0;
-            end
-            if(justifiF(n) == 0)
-                ovCount(m,n)=0;
-                ovCount(n,m)=0;
-                continue;
-            end
-            oR=full_over(occSamples{m}(1,:),occSamples{n}(1,:));
-            if oR>0.9&&((target_score{m}>0&&target_score{n}>0)||ovCount(m,n)>0)
-                ovCount(m,n)=ovCount(m,n)+1;
-                if ovCount(m,n)>50||To==nFrames
-                    if (occSamples{n}(1,3)*occSamples{n}(1,4)>occSamples{m}(1,3)*occSamples{m}(1,4))
-                        for frI = 1:length(ovCount(m,n))
-                            justifiF(m)=0;
-                            result(m,To+1-frI,:)=zeros(1,1,4);
-                        end
-                    else
-                        for frI = 1:length(ovCount(m,n))
-                            justifiF(n)=0;
-                            result(n,To+1-frI,:)=zeros(1,1,4);
-                        end
-                    end
-                end
-            else
-                ovCount(m,n)=0;
-            end
-        end
-    end
                 
                 
     for m=1:M
