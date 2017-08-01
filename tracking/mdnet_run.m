@@ -173,27 +173,29 @@ ovConv = cell(M,1);
 ovSamp = cell(M,1);
 SampStart = cell(M,1);
 SampEnd = cell(M,1);
+ovF=cell(M);
 %%%%%%%%%%%%%%
 
 %% Main loop
 for To = 2:min(nFrames)
-
+    target_score;
     fprintf('Processing frame %d/%d... ', To, nFrames);
     
     img = imread(images{To});
     if(size(img,3)==1), img = cat(3,img,img,img); end
     
-    detLoc = det(det(:,1)==To & det(:,7) > 0.1,3:6);
+    detLoc = det(det(:,1)==To & det(:,7) > 0,3:6);
     spf = tic;
-
     %% Estimation
     for m = 1:M
-        predLoc{m}=Trajectory_Pred(result(m,:,:),success_frames{m},To);
+
         %check the detection result first
         if(justifiF(m) == 0)
             continue;
         end
-        r = overlap_ratio(detLoc,predLoc{m});
+        prevLoc{m}=targetLoc(m,:);
+        predLoc{m}=Trajectory_Pred(result(m,:,:),success_frames{m},To);
+        r = overlap_ratio(detLoc,prevLoc{m});
         samples = detLoc(r > 0.7,:);
         if size(samples,1) > 0
             feat_conv = mdnet_features_convX(net_conv, img, samples, opts);
@@ -214,8 +216,8 @@ for To = 2:min(nFrames)
         else
             fprintf('Tracking ');
             
-            samples = gen_samples('gaussian',predLoc{m}, opts.nSamples, opts, trans_f(m), scale_f(m));
-            
+            samples = gen_samples('gaussian',prevLoc{m}, opts.nSamples, opts, trans_f(m), scale_f(m));
+            %samples = cat(1,samples,detLoc);
             feat_conv = mdnet_features_convX(net_conv, img, samples, opts);
 
             % evaluate the candidates
@@ -302,6 +304,9 @@ for To = 2:min(nFrames)
             try ovBool(n,m)==0;
             catch ovBool(n,m)=0;
             end
+            try ovF{m,n}==[];
+            catch ovF{m,n}=[];
+            end
             if(justifiF(n) == 0)
                 ovBool(m,n)=0;
                 ovBool(n,m)=0;
@@ -311,42 +316,53 @@ for To = 2:min(nFrames)
             thS=0.6;
             sim = cosine_sim(occFrames{m}(:,:,:,1),occFrames{n}(:,:,:,1));
             rat = overlap_ratio(occSamples{m}(1,:),occSamples{n}(1,:));
-            if  rat > thr/2&&(( sim > thS && target_score{m}>0 && target_score{n}>0)&&(sum(ovBool(m,:))==0)&&(sum(ovBool(n,:))==0) || ovBool(m,n))
+            if  rat > thr/2&&(( sim > thS && target_score{m}>0 && target_score{n}>0)|| ovBool(m,n))
+                if length(ovF{m,n})>50
+                    if target_score{m}>target_score{n}
+                        for frI = 1:len(ovF{m,n})
+                            justifiF(n)=0;
+                            result(n,ovF{m,n}(frI),:)=zeros(1,1,4);
+                        end
+                    else
+                        for frI = 1:len(ovF{m,n})
+                            justifiF(m)=0;
+                            result(m,ovF{m,n}(frI),:)=zeros(1,1,4);
+                        end
+                    end
+                    continue
+                end
                 if ovBool(m,n)==0
-                    ovConv{m}=cell(0);
-                    ovConv{n}=cell(0);
-                    ovSamp{m}=cell(0);
-                    ovSamp{n}=cell(0);
-                    SampStart{m}=cell(0);
-                    SampStart{n}=cell(0);
+                    ovF{m,n}=[];
                     ovBool(m,n)=1;
                     ovBool(n,m)=1;
                     [m,n,1]
                     img2 = imread(images{To-1});
                     fconv = mdnet_features_convX(net_conv, img2, result(m,To-1,:), opts);
-                    occStart{m} = fconv(:,:,:,1);
+                    occStart{m}{To} = fconv(:,:,:,1);
                     fconv = mdnet_features_convX(net_conv, img2, result(n,To-1,:), opts);
-                    occStart{n} = fconv(:,:,:,1);
-                    SampStart{n} =result(n,To-1,:);
-                    SampStart{m} =result(m,To-1,:);
+                    occStart{n}{To} = fconv(:,:,:,1);
+                    SampStart{n}{To} =result(n,To-1,:);
+                    SampStart{m}{To} =result(m,To-1,:);
                 end
-                ovConv{m}{end+1}{1}=occFrames{m}(:,:,:,1);
-                ovConv{n}{end+1}{1}=occFrames{n}(:,:,:,1);
-                ovSamp{m}{end+1}{1}=occSamples{m}(1,:);
-                ovSamp{n}{end+1}{1}=occSamples{n}(1,:);
+                ovF{m,n}=[ovF{m,n},To];
+                ovConv{m}{To}{1}=occFrames{m}(:,:,:,1);
+                ovConv{n}{To}{1}=occFrames{n}(:,:,:,1);
+                ovSamp{m}{To}{1}=occSamples{m}(1,:);
+                ovSamp{n}{To}{1}=occSamples{n}(1,:);
 
                 if length(occSamples{n}(:,1))>1
                     for ind=2:length(occSamples{n})
-                        if (overlap_ratio(occSamples{m}(1,:),occSamples{n}(ind,:))<thr) || cosine_sim(occFrames{m}(:,:,:,1),occFrames{n}(:,:,:,ind))<thS
-                            ovConv{n}{end}{2}=occFrames{n}(:,:,:,ind);
-                            ovSamp{n}{end}{2}=occSamples{n}(ind,:);
-                            %occSamples{n}=occSamples(ind:end,:);
-                            %occFrames{n}=occFrames(ind:end,:);
+                        
+                        if (overlap_ratio(ovSamp{m}{To}{1},occSamples{n}(ind,:))<thr) || cosine_sim(ovConv{m}{To}{1}(:,:,:,1),occFrames{n}(:,:,:,ind))<thS
+                            ovConv{n}{To}{2}=occFrames{n}(:,:,:,ind);
+                            ovSamp{n}{To}{2}=occSamples{n}(ind,:);
+                            occSamples{n}=occSamples{n}(ind:end,:);
+                            occFrames{n}=occFrames{n}(:,:,:,ind:end);
                             break;
                         end
                     end
                 else
-                    samples = gen_samples('gaussian',predLoc{n}), opts.nSamples, opts, trans_f(n), scale_f(n));
+                    samples = gen_samples('gaussian',prevLoc{n}, opts.nSamples, opts, trans_f(n), scale_f(n));
                     feat_conv = mdnet_features_convX(net_conv, img, samples, opts);
                     feat_fc = mdnet_features_fcX(net_fc{n}, feat_conv, opts);
                     feat_fc = squeeze(feat_fc)';
@@ -354,9 +370,9 @@ for To = 2:min(nFrames)
                     samples=samples(idx,:);
                     feat_conv=feat_conv(:,:,:,idx);
                     for ind=1:length(samples)
-                        if (overlap_ratio(occSamples{m}(1,:),samples(ind,:))<thr) || cosine_sim(occFrames{m}(:,:,:,1), feat_conv(:,:,:,ind))<thS
-                            ovConv{n}{end}{2}=feat_conv(:,:,:,ind);
-                            ovSamp{n}{end}{2}=samples(ind,:);
+                        if (overlap_ratio(ovSamp{m}{To}{1},samples(ind,:))<thr) || cosine_sim(ovConv{m}{To}{1}(:,:,:,1), feat_conv(:,:,:,ind))<thS
+                            ovConv{n}{To}{2}=feat_conv(:,:,:,ind);
+                            ovSamp{n}{To}{2}=samples(ind,:);
                             occSamples{n}=samples(ind:end,:);
                             occFrames{n}=feat_conv(:,:,:,ind:end);
                             break;
@@ -365,16 +381,16 @@ for To = 2:min(nFrames)
                 end
                 if length(occSamples{m}(:,1))>1
                     for ind=2:length(occSamples{m})
-                        if (overlap_ratio(occSamples{n}(1,:),occSamples{m}(ind,:))<thr) || cosine_sim(occFrames{n}(:,:,:,1),occFrames{m}(:,:,:,ind))<thS
-                            ovConv{m}{end}{2}=occFrames{m}(:,:,:,ind);
-                            ovSamp{m}{end}{2}=occSamples{m}(ind,:);
-                            %occSamples{n}=occSamples(ind:end,:);
-                            %occFrames{n}=occFrames(ind:end,:);
+                        if (overlap_ratio(ovSamp{n}{To}{1},occSamples{m}(ind,:))<thr) || cosine_sim(ovConv{n}{To}{1},occFrames{m}(:,:,:,ind))<thS
+                            ovConv{m}{To}{2}=occFrames{m}(:,:,:,ind);
+                            ovSamp{m}{To}{2}=occSamples{m}(ind,:);
+                            occSamples{m}=occSamples{m}(ind:end,:);
+                            occFrames{m}=occFrames{m}(:,:,:,ind:end);
                             break;
                         end
                     end
                 else
-                    samples = gen_samples('gaussian', predLoc{m}, opts.nSamples, opts, trans_f(m), scale_f(m));
+                    samples = gen_samples('gaussian', prevLoc{m}, opts.nSamples, opts, trans_f(m), scale_f(m));
                     feat_conv = mdnet_features_convX(net_conv, img, samples, opts);
                     feat_fc = mdnet_features_fcX(net_fc{m}, feat_conv, opts);
                     feat_fc = squeeze(feat_fc)';
@@ -382,9 +398,9 @@ for To = 2:min(nFrames)
                     samples=samples(idx,:);
                     feat_conv=feat_conv(:,:,:,idx);
                     for ind=1:length(samples)
-                        if (overlap_ratio(occSamples{n}(1,:),samples(ind,:))<thr) || cosine_sim(occFrames{n}(:,:,:,1), feat_conv(:,:,:,ind))<thS
-                            ovConv{m}{end}{2}=feat_conv(:,:,:,ind);
-                            ovSamp{m}{end}{2}=samples(ind,:);
+                        if (overlap_ratio(ovSamp{n}{To}{1},samples(ind,:))<thr) || cosine_sim(ovConv{n}{To}{1}, feat_conv(:,:,:,ind))<thS
+                            ovConv{m}{To}{2}=feat_conv(:,:,:,ind);
+                            ovSamp{m}{To}{2}=samples(ind,:);
                             occSamples{m}=samples(ind:end,:);
                             occFrames{m}=feat_conv(:,:,:,ind:end);
                             break;
@@ -402,14 +418,16 @@ for To = 2:min(nFrames)
                 SampEnd{n} =result(n,To,:);
                 SampEnd{m} =result(m,To,:);
                 x=[m,n];
-                if min([length(ovConv{m}),length(ovConv{n})])>1
-                    [s,ind]=SimDP(occStart,ovConv,occEnd,ovSamp,SampStart,SampEnd,x);
+                if length(ovF{m,n})>1
+                    [s,ind]=SimDP(occStart,ovConv,occEnd,ovSamp,SampStart,SampEnd,x,ovF{m,n});
                     ind;
-                    for i=1:length(ind)
+                    for i=2:length(ind)
                         frI = To-(length(ind)+1)+i;
 
                         for j=1:length(x)
-                            result(x(j),frI,:)=ovSamp{x(j)}{i}{(j~=ind(i))+1};
+                            result(x(j),frI,:)=ovSamp{x(j)}{frI}{(j~=ind(i))+1};
+                            ovSamp{x(j)}{frI}{1}=ovSamp{x(j)}{frI}{(j~=ind(i))+1};
+                            ovConv{x(j)}{frI}{1}=ovConv{x(j)}{frI}{(j~=ind(i))+1};
                         end
                     end
                     tmp=result;
@@ -426,7 +444,7 @@ for To = 2:min(nFrames)
                             set(hd,'cdata',img2); hold on;
 
                             for c = 1:M
-                                if((justifi(c) == 0) || justifiF(c) == 0)%  && 
+                                if(justifiF(c) == 0)||(justifi(c) == 0)%  && 
                                     continue;
                                 end
                                 rectangle('Position', result(c,frI,:), 'EdgeColor', colormap(c,:), 'Linewidth', 1);
@@ -601,7 +619,7 @@ for To = 2:min(nFrames)
                 for idM = 1:M
                     if 1==1%(justifi(idM, 1) == 1)
                         ra = max([overlap_ratio(decRes(idx,:), result(idM, To, :)),overlap_ratio(decRes(idx,:), predLoc{idM})]);
-                        if(ra > 0.3)
+                        if(ra > 0.2)
                             situation = 1;
                             break;
                         end
@@ -661,7 +679,9 @@ for To = 2:min(nFrames)
                     feat_conv = mdnet_features_convX(net_conv, img, examples, opts);
                     total_pos_data{1,1,1,M,To} = feat_conv(:,:,:,pos_idx);
                     total_neg_data{1,1,1,M,To} = feat_conv(:,:,:,neg_idx);
-                
+                    
+                    prevLoc{M}=result(M,To,:);
+                    predLoc{M}=result(M,To,:);
                     success_frames{M} = [To];
                     trans_f(M) = opts.trans_f;
                     scale_f(M) = opts.scale_f;
@@ -685,6 +705,32 @@ for To = 2:min(nFrames)
                 continue;
             end
             rectangle('Position', result(m,To,:), 'EdgeColor', colormap(m,:), 'Linewidth', 1);
+            %rectangle('Position', prevLoc{m}, 'EdgeColor', colormap(m,:), 'Linewidth', 1);
+            text(result(m,To,1) + targetLoc(m,3)/2,result(m,To,2) + 12,num2str(m),'Color',colormap(m,:), 'FontSize', 18, 'HorizontalAlignment', 'center'); 
+        end
+        
+        %%rectangle('Position', result(To,:), 'EdgeColor', [1 0 0], 'Linewidth', 1);
+        set(gca,'position',[0 0 1 1]);
+        
+        text(10,10,num2str(To),'Color','y', 'HorizontalAlignment', 'left', 'FontWeight','bold', 'FontSize', 30); 
+        hold off;
+        imwrite(frame2im(getframe(gcf)), [pathSave num2str(To) '.jpg']);
+       
+        drawnow;
+    end
+end
+for To = 2:min(nFrames)
+    img = imread(images{To});
+    if display
+        hc = get(gca, 'Children'); delete(hc(1:end-1));
+        set(hd,'cdata',img); hold on;
+        
+        for m = 1:M
+            if min(result(m,To,3:4))<=0 
+                continue;
+            end
+            rectangle('Position', result(m,To,:), 'EdgeColor', colormap(m,:), 'Linewidth', 1);
+            %rectangle('Position', prevLoc{m}, 'EdgeColor', colormap(m,:), 'Linewidth', 1);
             text(result(m,To,1) + targetLoc(m,3)/2,result(m,To,2) + 12,num2str(m),'Color',colormap(m,:), 'FontSize', 18, 'HorizontalAlignment', 'center'); 
         end
         

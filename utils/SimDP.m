@@ -1,17 +1,17 @@
-function [sim,indices] = SimDP(start,conv,ovEnd,ovSamp,SampStart,SampEnd,x)
+function [sim,indices] = SimDP(start,conv,ovEnd,ovSamp,SampStart,SampEnd,x,ovF)
     for i = 1:length(x)
-        frame_graph{1}{i}{1}=start{x(i)};
-        frame_graph{1}{i}{2}=start{x(i)};
-        Samp{1}{i}{1}=SampStart{x(i)};
-        Samp{1}{i}{2}=SampStart{x(i)};
-        for j = 1:length(conv{x(i)})
-            frame_graph{j+1}{i}=conv{x(i)}{j};
-            Samp{j+1}{i}=ovSamp{x(i)}{j};
+        frame_graph{1}{i}{1}=start{x(i)}{ovF(1)};
+        frame_graph{1}{i}{2}=start{x(i)}{ovF(1)};
+        Samp{1}{i}{1}=SampStart{x(i)}{ovF(1)};
+        Samp{1}{i}{2}=SampStart{x(i)}{ovF(1)};
+        for j = 1:length(ovF)
+            frame_graph{j+1}{i}=conv{x(i)}{ovF(j)};
+            Samp{j+1}{i}=ovSamp{x(i)}{ovF(j)};
         end
-        frame_graph{length(conv{i})+1}{i}{1}=ovEnd{x(i)};
-        frame_graph{length(conv{i})+1}{i}{2}=ovEnd{x(i)};
-        Samp{length(ovSamp{i})+1}{i}{1}=SampEnd{x(i)};
-        Samp{length(ovSamp{i})+1}{i}{2}=SampEnd{x(i)};
+        frame_graph{length(ovF)+2}{i}{1}=ovEnd{x(i)};
+        frame_graph{length(ovF)+2}{i}{2}=ovEnd{x(i)};
+        Samp{length(ovF)+2}{i}{1}=SampEnd{x(i)};
+        Samp{length(ovF)+2}{i}{2}=SampEnd{x(i)};
     end
     for i = 1:length(x)+1
         sim{1}(i)=1;
