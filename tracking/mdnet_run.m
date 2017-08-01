@@ -169,6 +169,7 @@ nSamp=repmat({5}, M, 1);
 occCount=cell(M,1);
 target_score=cell(M,1);
 ovBool=0;
+ovCount=0;
 ovConv = cell(M,1);
 ovSamp = cell(M,1);
 SampStart = cell(M,1);
@@ -249,8 +250,11 @@ for To = 2:min(nFrames)
         if(target_score{m} >= 0)
             MoF(m,1) = 0;
         else
-            if(MoF(m,1) > 120)
+            if(MoF(m,1) > 120)||To==nFrames
                 justifiF(m, 1) = 0;
+                for frI = 1:MoF(m,1)
+                    result(m,To+1-frI,:)=zeros(1,1,4);
+                end
             else
                 MoF(m,1) = MoF(m,1) + 1;
             end
@@ -317,14 +321,16 @@ for To = 2:min(nFrames)
             sim = cosine_sim(occFrames{m}(:,:,:,1),occFrames{n}(:,:,:,1));
             rat = overlap_ratio(occSamples{m}(1,:),occSamples{n}(1,:));
             if  rat > thr/2&&(( sim > thS && target_score{m}>0 && target_score{n}>0)|| ovBool(m,n))
-                if length(ovF{m,n})>50
+                if length(ovF{m,n})>50 || To==nFrames
+                    ovBool(m,n)=0;
+                    ovBool(n,m)=0;
                     if target_score{m}>target_score{n}
-                        for frI = 1:len(ovF{m,n})
+                        for frI = 1:length(ovF{m,n})
                             justifiF(n)=0;
                             result(n,ovF{m,n}(frI),:)=zeros(1,1,4);
                         end
                     else
-                        for frI = 1:len(ovF{m,n})
+                        for frI = 1:length(ovF{m,n})
                             justifiF(m)=0;
                             result(m,ovF{m,n}(frI),:)=zeros(1,1,4);
                         end
@@ -465,7 +471,48 @@ for To = 2:min(nFrames)
             end
         end
     end
-    
+    for m=1:M-1
+        if(justifiF(m) == 0)
+            ovCount(m,:)=0;
+            ovCount(:,m)=0;
+            continue;
+        end
+        for n=m+1:M
+
+            try ovCount(m,n)==0;
+            catch ovCount(m,n)=0;
+            end
+            try ovCount(n,m)==0;
+            catch ovCount(n,m)=0;
+            end
+            if(justifiF(n) == 0)
+                ovCount(m,n)=0;
+                ovCount(n,m)=0;
+                continue;
+            end
+            oR=full_over(occSamples{m}(1,:),occSamples{n}(1,:));
+            if oR>0.9&&((target_score{m}>0&&target_score{n}>0)||ovCount(m,n)>0)
+                ovCount(m,n)=ovCount(m,n)+1;
+                if ovCount(m,n)>50||To==nFrames
+                    if (occSamples{n}(1,3)*occSamples{n}(1,4)>occSamples{m}(1,3)*occSamples{m}(1,4))
+                        for frI = 1:length(ovCount(m,n))
+                            justifiF(m)=0;
+                            result(m,To+1-frI,:)=zeros(1,1,4);
+                        end
+                    else
+                        for frI = 1:length(ovCount(m,n))
+                            justifiF(n)=0;
+                            result(n,To+1-frI,:)=zeros(1,1,4);
+                        end
+                    end
+                end
+            else
+                ovCount(m,n)=0;
+            end
+        end
+    end
+                
+                
     for m=1:M
         if(justifiF(m) == 0)
             continue;
@@ -585,7 +632,7 @@ for To = 2:min(nFrames)
     decRes = setdiff(detLoc,resultT,'rows');
 
     %% Branch Increase
-    if(mod(To,1) == 0 && ~isempty(decRes))
+    if(mod(To,10) == 0 && ~isempty(decRes))
         if(M >= 5)
             % Filter the false positive situation
             decRestemp = zeros(size(decRes,1),1);
@@ -619,7 +666,8 @@ for To = 2:min(nFrames)
                 for idM = 1:M
                     if 1==1%(justifi(idM, 1) == 1)
                         ra = max([overlap_ratio(decRes(idx,:), result(idM, To, :)),overlap_ratio(decRes(idx,:), predLoc{idM})]);
-                        if(ra > 0.2)
+                        ba = (full_over(decRes(idx,:), result(idM, To, :))==1)||(full_over(decRes(idx,:), predLoc{idM})==1);
+                        if(ra > 0.2||ba)
                             situation = 1;
                             break;
                         end
