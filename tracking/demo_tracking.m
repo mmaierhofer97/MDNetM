@@ -7,7 +7,7 @@
 
 clear;
 
-conf = genConfig('mot','/MOT16/test/MOT16-06/');
+conf = genConfig('mot','/MOT16/train/MOT16-02/');
 % conf = genConfig('vot2015','ball1');
 
 switch(conf.dataset)

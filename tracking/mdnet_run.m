@@ -199,7 +199,7 @@ for To = 2:min(nFrames)
         predLoc{m}=Trajectory_Pred(result(m,:,:),success_frames{m},To);
         r = overlap_ratio(detLoc,prevLoc{m});
         if target_score{m}>0
-            o=full_over(detLoc,prevLoc{m});
+            o=zeros(size(detLoc(:,1)));%full_over(detLoc,prevLoc{m});
         else
             o=zeros(size(detLoc(:,1)));
         end
@@ -659,7 +659,7 @@ for To = 2:min(nFrames)
                     if 1==1%(justifi(idM, 1) == 1)
                         ra = max([overlap_ratio(decRes(idx,:), result(idM, To, :)),overlap_ratio(decRes(idx,:), predLoc{idM})]);
                         ba = (full_over(decRes(idx,:), result(idM, To, :))==1)||(full_over(decRes(idx,:), predLoc{idM})==1);
-                        if(ra > 0.2||ba)
+                        if(ra > 0.4||ba)
                             situation = 1;
                             break;
                         end
