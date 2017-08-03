@@ -33,7 +33,7 @@ function [sim,indices] = SimDP(start,conv,ovEnd,ovSamp,SampStart,SampEnd,x,ovF)
                  if s>maxi
                      maxi = s;
                      index = k;
-                 end    
+                 end 
              sim{i}(j)=maxi;
              ind{i}(j)= index;
              end
@@ -49,6 +49,7 @@ function [sim,indices] = SimDP(start,conv,ovEnd,ovSamp,SampStart,SampEnd,x,ovF)
         j=ind{end-i-1};
         i=i+1;
     end
-   indices = wrev(indices);
+    rev=[length(indices):-1:1];
+   indices = indices(rev);
 
 end
